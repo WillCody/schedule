@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule Viewer</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 2rem; }
+    h1, h2 { text-align: center; }
+    .now { background: #def; padding: 1rem; border-left: 5px solid #39f; margin-bottom: 2rem; }
+    .day-schedule { margin-bottom: 2rem; }
+    .entry { margin: 0.5rem 0; }
+    .focus { font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>📅 Today's Schedule</h1>
+  <div id="current" class="now"></div>
+  <div class="day-schedule">
+    <h2>Today</h2>
+    <div id="today"></div>
+  </div>
+  <div class="day-schedule">
+    <h2>Tomorrow</h2>
+    <div id="tomorrow"></div>
+  </div>
+
+  <script>
+    async function loadSchedule() {
+      const response = await fetch('schedule.csv');
+      const text = await response.text();
+      const rows = text.trim().split('\n');
+      const headers = rows.shift().split(',');
+      const data = rows.map(row => Object.fromEntries(row.split(',').map((val, i) => [headers[i], val])));
+
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(today.getDate() + 1);
+      const todayStr = today.toISOString().split('T')[0];
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+      const now = today.getHours() + today.getMinutes() / 60;
+
+      const displayDay = (dateStr, containerId) => {
+        const group = data.filter(entry => entry.Date === dateStr);
+        const container = document.getElementById(containerId);
+        if (group.length === 0) {
+          container.innerHTML = '<p>No data.</p>';
+          return;
+        }
+        const focus = group[0]['Training Focus'];
+        let html = `<p class="focus">Training Focus: ${focus}</p>`;
+        html += '<table><tr><th>Part</th><th>Start</th><th>End</th><th>Activity</th></tr>';
+        group.forEach(e => {
+          html += `<tr><td>${e['Part of Day']}</td><td>${e['Start Time']}</td><td>${e['End Time']}</td><td>${e['Activity']}</td></tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+      };
+
+      const currentEntry = data.find(e => {
+        if (e.Date !== todayStr || !e['Start Time'] || !e['End Time']) return false;
+        const start = parseFloat(e['Start Time'].slice(0, 2)) + parseFloat(e['Start Time'].slice(3)) / 60;
+        const end = parseFloat(e['End Time'].slice(0, 2)) + parseFloat(e['End Time'].slice(3)) / 60;
+        return now >= start && now < end;
+      });
+
+      const currentDiv = document.getElementById('current');
+      if (currentEntry) {
+        currentDiv.innerHTML = `<p><strong>Now:</strong> ${currentEntry['Activity']}</p><p class="focus">Focus: ${currentEntry['Training Focus']}</p>`;
+      } else {
+        currentDiv.innerHTML = '<p>No current activity.</p>';
+      }
+
+      displayDay(todayStr, 'today');
+      displayDay(tomorrowStr, 'tomorrow');
+    }
+
+    loadSchedule();
+  </script>
+</body>
+</html>
