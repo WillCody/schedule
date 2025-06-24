@@ -28,6 +28,11 @@
   </div>
 
   <script>
+    function toISODate(dmyStr) {
+      const [d, m, y] = dmyStr.split("/");
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
     async function loadSchedule() {
       const response = await fetch('schedule.csv');
       const text = await response.text();
@@ -43,15 +48,15 @@
 
       const now = today.getHours() + today.getMinutes() / 60;
 
-      const displayDay = (dateStr, containerId) => {
-        const group = data.filter(entry => entry.Date === dateStr);
+      const displayDay = (targetDateStr, containerId) => {
+        const group = data.filter(entry => toISODate(entry.Date) === targetDateStr);
         const container = document.getElementById(containerId);
         if (group.length === 0) {
           container.innerHTML = '<p>No data.</p>';
           return;
         }
         const focus = group[0]['Training Focus'];
-        let html = `<p class="focus">Training Focus: ${focus}</p>`;
+        let html = `<p class=\"focus\">Training Focus: ${focus}</p>`;
         html += '<table><tr><th>Part</th><th>Start</th><th>End</th><th>Activity</th></tr>';
         group.forEach(e => {
           html += `<tr><td>${e['Part of Day']}</td><td>${e['Start Time']}</td><td>${e['End Time']}</td><td>${e['Activity']}</td></tr>`;
@@ -61,7 +66,7 @@
       };
 
       const currentEntry = data.find(e => {
-        if (e.Date !== todayStr || !e['Start Time'] || !e['End Time']) return false;
+        if (toISODate(e.Date) !== todayStr || !e['Start Time'] || !e['End Time']) return false;
         const start = parseFloat(e['Start Time'].slice(0, 2)) + parseFloat(e['Start Time'].slice(3)) / 60;
         const end = parseFloat(e['End Time'].slice(0, 2)) + parseFloat(e['End Time'].slice(3)) / 60;
         return now >= start && now < end;
@@ -69,7 +74,7 @@
 
       const currentDiv = document.getElementById('current');
       if (currentEntry) {
-        currentDiv.innerHTML = `<p><strong>Now:</strong> ${currentEntry['Activity']}</p><p class="focus">Focus: ${currentEntry['Training Focus']}</p>`;
+        currentDiv.innerHTML = `<p><strong>Now:</strong> ${currentEntry['Activity']}</p><p class=\"focus\">Focus: ${currentEntry['Training Focus']}</p>`;
       } else {
         currentDiv.innerHTML = '<p>No current activity.</p>';
       }
