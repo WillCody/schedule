@@ -13,18 +13,21 @@
     .focus { font-weight: bold; }
     table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
     th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+    .nav-buttons { text-align: center; margin: 2rem 0; }
+    .nav-buttons button { margin: 0 1rem; padding: 0.5rem 1rem; font-size: 1rem; }
   </style>
 </head>
 <body>
   <h1>📅 Today's Schedule</h1>
   <div id="current" class="now"></div>
-  <div class="day-schedule">
-    <h2>Today</h2>
-    <div id="today"></div>
+  <div class="nav-buttons">
+    <button onclick="changeOffset(-1)">← Previous</button>
+    <button onclick="resetOffset()">Today</button>
+    <button onclick="changeOffset(1)">Next →</button>
   </div>
   <div class="day-schedule">
-    <h2>Tomorrow</h2>
-    <div id="tomorrow"></div>
+    <h2 id="viewing-date">Date</h2>
+    <div id="day-view"></div>
   </div>
 
   <script>
@@ -33,44 +36,73 @@
       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
 
+    let dateOffset = 0;
+    let scheduleData = [];
+
+    function formatDate(d) {
+      return d.toISOString().split('T')[0];
+    }
+
+    function getOffsetDate(offset) {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return d;
+    }
+
+    function changeOffset(delta) {
+      dateOffset += delta;
+      renderSchedule();
+    }
+
+    function resetOffset() {
+      dateOffset = 0;
+      renderSchedule();
+    }
+
+    function displayDay(targetDateStr, containerId, data) {
+      const group = data.filter(entry => toISODate(entry.Date) === targetDateStr);
+      const container = document.getElementById(containerId);
+      if (group.length === 0) {
+        container.innerHTML = '<p>No data.</p>';
+        return;
+      }
+      const focus = group[0]['Training Focus'];
+      let html = `<p class=\"focus\">Training Focus: ${focus}</p>`;
+      html += '<table><tr><th>Part</th><th>Start</th><th>End</th><th>Activity</th></tr>';
+      group.forEach(e => {
+        html += `<tr><td>${e['Part of Day']}</td><td>${e['Start Time']}</td><td>${e['End Time']}</td><td>${e['Activity']}</td></tr>`;
+      });
+      html += '</table>';
+      container.innerHTML = html;
+    }
+
     async function loadSchedule() {
       const response = await fetch('schedule.csv');
       const text = await response.text();
       const rows = text.trim().split('\n');
       const headers = rows.shift().split(',');
-      const data = rows.map(row => Object.fromEntries(row.split(',').map((val, i) => [headers[i], val])));
+      scheduleData = rows.map(row => Object.fromEntries(row.split(',').map((val, i) => [headers[i], val])));
+      renderSchedule();
+    }
 
-      const today = new Date();
-      const tomorrow = new Date();
-      tomorrow.setDate(today.getDate() + 1);
-      const todayStr = today.toISOString().split('T')[0];
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    function renderSchedule() {
+      const targetDate = getOffsetDate(dateOffset);
+      const targetDateStr = formatDate(targetDate);
+      const viewingDateElem = document.getElementById("viewing-date");
+      viewingDateElem.textContent = targetDate.toDateString();
 
-      const now = today.getHours() + today.getMinutes() / 60;
-
-      const displayDay = (targetDateStr, containerId) => {
-        const group = data.filter(entry => toISODate(entry.Date) === targetDateStr);
-        const container = document.getElementById(containerId);
-        if (group.length === 0) {
-          container.innerHTML = '<p>No data.</p>';
-          return;
-        }
-        const focus = group[0]['Training Focus'];
-        let html = `<p class=\"focus\">Training Focus: ${focus}</p>`;
-        html += '<table><tr><th>Part</th><th>Start</th><th>End</th><th>Activity</th></tr>';
-        group.forEach(e => {
-          html += `<tr><td>${e['Part of Day']}</td><td>${e['Start Time']}</td><td>${e['End Time']}</td><td>${e['Activity']}</td></tr>`;
+      const now = new Date();
+      const todayStr = formatDate(now);
+      let currentEntry = null;
+      if (formatDate(targetDate) === todayStr) {
+        currentEntry = scheduleData.find(e => {
+          if (toISODate(e.Date) !== todayStr || !e['Start Time'] || !e['End Time']) return false;
+          const start = parseFloat(e['Start Time'].slice(0, 2)) + parseFloat(e['Start Time'].slice(3)) / 60;
+          const end = parseFloat(e['End Time'].slice(0, 2)) + parseFloat(e['End Time'].slice(3)) / 60;
+          const nowHr = now.getHours() + now.getMinutes() / 60;
+          return nowHr >= start && nowHr < end;
         });
-        html += '</table>';
-        container.innerHTML = html;
-      };
-
-      const currentEntry = data.find(e => {
-        if (toISODate(e.Date) !== todayStr || !e['Start Time'] || !e['End Time']) return false;
-        const start = parseFloat(e['Start Time'].slice(0, 2)) + parseFloat(e['Start Time'].slice(3)) / 60;
-        const end = parseFloat(e['End Time'].slice(0, 2)) + parseFloat(e['End Time'].slice(3)) / 60;
-        return now >= start && now < end;
-      });
+      }
 
       const currentDiv = document.getElementById('current');
       if (currentEntry) {
@@ -79,8 +111,7 @@
         currentDiv.innerHTML = '<p>No current activity.</p>';
       }
 
-      displayDay(todayStr, 'today');
-      displayDay(tomorrowStr, 'tomorrow');
+      displayDay(targetDateStr, 'day-view', scheduleData);
     }
 
     loadSchedule();
